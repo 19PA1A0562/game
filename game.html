@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+canvas {
+    border:1px solid #d3d3d3;
+    background-color: #f1f1f1;
+    background-image:url("https://live.staticflickr.com/7306/27691115156_6576041bff_b.jpg");
+    background-repeat: repeat;
+    background-attachment: fixed;
+    background-size: cover;
+    font-size: 12px;
+    font-family: 'Dancing Script', cursive;
+    -webkit-animation: backgroundScroll 15s linear 1;
+    -webkit-animation-fill-mode: forwards;
+    animation: backgroundScroll 15s linear 1;
+    animation-fill-mode: forwards;
+}
+@-webkit-keyframes backgroundScroll {
+from {background-position: 0 0;}
+to {background-position: -300px 0px;}
+}
+
+@keyframes backgroundScroll {
+from {background-position: 0 0;}
+to {background-position: -300px 0px;}
+
+}
+</style>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.9.0/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.9.0/addons/p5.dom.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.9.0/addons/p5.sound.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    <script src="https://unpkg.com/ml5@0.4.2/dist/ml5.min.js">
+</script>
+</head>
+<body onload="startGame()">
+<script>
+
+var myGamePiece;
+var myObstacles = [];
+var myBackground;
+let video;
+let flipVideo;
+var myScore;
+let classifier;
+let label = 'waiting...';
+let modelURL = 'https://storage.googleapis.com/tm-model/wYdEvp9h1/';
+
+// STEP 1: Load the model!
+function preload() {
+  classifier = ml5.soundClassifier(modelURL + 'model.json');
+}
+
+function snakeControl(){
+    if(label==="up"){
+        myGamePiece.speedY = -1; 
+    }
+    if(label==="down"){
+        myGamePiece.speedY = 1;
+    }
+    if(label === 'left'){
+        myGamePiece.speedX = -1;
+    } 
+    if(label === 'right'){
+        myGamePiece.speedX = 1; 
+    }
+    if(label === 'Background Noise'){
+        myGamePiece.speedX = 0; 
+        myGamePiece.speedY = 0; 
+    }
+}
+function setup(){
+    classifyAudio();
+}
+
+function classifyAudio() {
+  classifier.classify(gotResults);
+  background(size(-10,-10));
+}
+
+function gotResults(error, results) {
+  if (error) {
+    console.error(error);
+    return;
+  }
+  label = results[0].label;
+  // Control the snake and classify again!
+  snakeControl();
+
+}
+
+
+function startGame() {
+    myGamePiece = new component(40, 40,"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTs5GcH9JaYlpJkqFpRhAGKWZaoRtB12vGlNlsB3fRyG1-i9kq1bp7h_s-EMm-P3K0nBNlFmIRChD7EAROK66VOkJt7xisdoGFWJQ&usqp=CAU&ec=45761792" , 500, 120,"image");
+    myScore = new component("50px", "Consolas", "white", 280, 400, "text");
+    myGameArea.start();
+}
+
+
+var myGameArea = {
+    canvas : document.createElement("canvas"),
+    start : function() {
+        this.canvas.width = 1500;
+        this.canvas.height = 500;
+        this.context = this.canvas.getContext("2d");
+        
+        document.body.insertBefore(this.canvas, document.body.childNodes[0]);
+        this.frameNo = 0;
+        this.interval = setInterval(updateGameArea, 20);
+        },
+    clear : function() {
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    },
+    stop : function() {
+        clearInterval(this.interval);
+    }
+}
+
+function component(width, height, color, x, y, type) {
+    this.type = type;
+    if (type == "image") {
+    this.image = new Image();
+    this.image.src = color;
+  }
+    this.width = width;
+    this.height = height;
+    this.speedX = 0;
+    this.speedY = 0;    
+    this.x = x;
+    this.y = y;    
+    this.update = function() {
+        ctx = myGameArea.context;
+        if (type == "image") {
+        ctx.drawImage(this.image,
+            this.x,
+            this.y,
+            this.width, this.height);
+        }
+        else if (type == "text") {
+            ctx.font = this.width + " " + this.height;
+            ctx.fillStyle = color;
+            ctx.fillText(this.text, this.x, this.y);
+        }
+        else {
+      ctx.fillStyle = color;
+      ctx.fillRect(this.x, this.y, this.width, this.height);
+    }
+  }
+    
+    
+    this.newPos = function() {
+        this.x += this.speedX;
+        this.y += this.speedY;        
+    }
+    this.crashWith = function(otherobj) {
+        var myleft = this.x;
+        var myright = this.x + (this.width);
+        var mytop = this.y;
+        var mybottom = this.y + (this.height);
+        var otherleft = otherobj.x;
+        var otherright = otherobj.x + (otherobj.width);
+        var othertop = otherobj.y;
+        var otherbottom = otherobj.y + (otherobj.height);
+        var crash = true;
+        if ((mybottom < othertop) || (mytop > otherbottom) || (myright < otherleft) || (myleft > otherright)) {
+            crash = false;
+        }
+        return crash;
+    }
+}
+
+function updateGameArea() {
+    var x, height, gap, minHeight, maxHeight, minGap, maxGap;
+    for (i = 0; i < myObstacles.length; i += 1) {
+        if (myGamePiece.crashWith(myObstacles[i])) {
+        myGameArea.stop();
+        return;
+        }
+    }
+    myGameArea.clear();
+    myGameArea.frameNo += 1;
+    if (myGameArea.frameNo == 1 || everyinterval(150)) {
+        x = myGameArea.canvas.width;
+        minHeight = 20;
+        maxHeight = 200;
+        height = Math.floor(Math.random()*(maxHeight-minHeight+1)+minHeight);
+        minGap = 50;
+        maxGap = 200;
+        gap = Math.floor(Math.random()*(maxGap-minGap+1)+minGap);
+        myObstacles.push(new component(10, height, "skyblue", x, 0));
+        myObstacles.push(new component(10, x - height - gap, "skyblue", x, height + gap));
+    }
+    for (i = 0; i < myObstacles.length; i += 1) {
+        myObstacles[i].speedX = -1;
+        myObstacles[i].newPos();
+        myObstacles[i].update();
+    }
+    myScore.text = "SCORE: " + myGameArea.frameNo;
+    myScore.update();
+    myGamePiece.newPos();
+    myGamePiece.update();
+}
+function everyinterval(n) {
+    if ((myGameArea.frameNo / n) % 1 == 0) {return true;}
+    return false;
+}
+
+function moveup() {
+    myGamePiece.speedY = -1; 
+}
+
+function movedown() {
+    myGamePiece.speedY = 1; 
+}
+
+function moveleft() {
+    myGamePiece.speedX = -1;
+}
+
+function moveright() {    
+    myGamePiece.speedX = 1; 
+}
+
+function clearmove() {
+    myGamePiece.speedX = 0; 
+    myGamePiece.speedY = 0; 
+}
+</script>
+<div style="text-align: center;"><h4>YOU CAN PLAY USING KEYS</h4></div>
+<div style="text-align:center;width:1480px;">
+  <button class="btn btn-info btn-lg" onmousedown="moveup()" onmouseup="clearmove()" ontouchstart="moveup()">
+    <span class="glyphicon glyphicon-hand-up"></span> Up</button><br><br>
+  <button class="btn btn-info btn-lg" onmousedown="moveleft()" onmouseup="clearmove()" ontouchstart="moveleft()"> <span class="glyphicon glyphicon-hand-left"></span> Left</button>
+  <button class="btn btn-info btn-lg" onmousedown="moveright()" onmouseup="clearmove()" ontouchstart="moveright()">
+    <span class="glyphicon glyphicon-hand-right"></span> Right</button><br><br>
+  <button class="btn btn-info btn-lg" onmousedown="movedown()" onmouseup="clearmove()" ontouchstart="movedown()" > <span class="glyphicon glyphicon-hand-down"></span>Down</button>
+  
+</div>
+
+<div><p>The score will count one point for each frame you manage to "stay alive".</p></div>
+</body>
+</html>
